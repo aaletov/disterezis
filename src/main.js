@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import rotUrl from '/assets/rot.png'
+import huiUrl from '/assets/hui.png'
 
 const config = {
   type: Phaser.AUTO,
@@ -29,8 +31,8 @@ let scoreText;
 
 function preload() {
   // Load any assets here
-  this.load.image('basket', '/assets/rot.png');
-  this.load.image('item', '/assets/hui.png');
+  this.load.image('basket', rotUrl);
+  this.load.image('item', huiUrl);
 }
 
 function create() {
