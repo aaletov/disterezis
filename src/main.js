@@ -2,9 +2,16 @@ import Phaser from 'phaser';
 
 const config = {
   type: Phaser.AUTO,
-  width: 300,
+  width: 800,
   height: 600,
-  backgroundColor: 0x333333,
+  backgroundColor: 0x87ceeb, // Light blue background
+  physics: {
+    default: 'arcade',
+    arcade: {
+      gravity: { y: 0 }, // No gravity for now
+      debug: false,
+    },
+  },
   scene: {
     preload: preload,
     create: create,
@@ -14,177 +21,73 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-const gridSize = 30; // Size of each block
-const cols = 10; // Number of columns
-const rows = 20; // Number of rows
+let player; // The basket or paddle
+let items; // Group of falling items
+let cursors; // Keyboard input
+let score = 0; // Player's score
+let scoreText;
 
-let grid;
-let currentPiece;
-let nextPiece;
-let dropTime = 500; // Time between automatic drops
-let dropCounter = 0;
-let lastTime = 0;
-
-const tetrominoes = [
-  // Define tetromino shapes
-  [[1, 1, 1, 1]], // I shape
-  [
-    [1, 1],
-    [1, 1],
-  ], // O shape
-  [
-    [1, 1, 0],
-    [0, 1, 1],
-  ], // S shape
-  [
-    [0, 1, 1],
-    [1, 1, 0],
-  ], // Z shape
-  [
-    [1, 1, 1],
-    [0, 1, 0],
-  ], // T shape
-  [
-    [1, 1, 1],
-    [1, 0, 0],
-  ], // L shape
-  [
-    [1, 1, 1],
-    [0, 0, 1],
-  ], // J shape
-];
-
-function preload() {}
+function preload() {
+  // Load any assets here
+  this.load.image('basket', 'https://via.placeholder.com/80x20?text=Basket');
+  this.load.image('item', 'https://via.placeholder.com/20x20?text=Item');
+}
 
 function create() {
-  grid = createEmptyGrid();
-  currentPiece = createPiece();
-  nextPiece = createPiece();
+  // Add player (basket)
+  player = this.physics.add.sprite(400, 550, 'basket').setImmovable();
+  player.body.setCollideWorldBounds(true);
 
-  this.input.keyboard.on('keydown-LEFT', () => movePiece(-1));
-  this.input.keyboard.on('keydown-RIGHT', () => movePiece(1));
-  this.input.keyboard.on('keydown-DOWN', () => dropPiece());
-  this.input.keyboard.on('keydown-UP', () => rotatePiece());
+  // Add falling items group
+  items = this.physics.add.group();
+
+  // Create score text
+  scoreText = this.add.text(10, 10, 'Score: 0', {
+    fontSize: '20px',
+    fill: '#000',
+  });
+
+  // Spawn items every 1 second
+  this.time.addEvent({
+    delay: 1000,
+    loop: true,
+    callback: () => {
+      const x = Phaser.Math.Between(50, 750); // Random x position
+      const item = items.create(x, 0, 'item');
+      item.setVelocity(0, 200); // Set falling speed
+      item.setCollideWorldBounds(true);
+      item.setBounce(1);
+    },
+  });
+
+  // Enable collision detection between player and items
+  this.physics.add.collider(player, items, catchItem, null, this);
+
+  // Set up cursor keys for movement
+  cursors = this.input.keyboard.createCursorKeys();
 }
 
-function update(time) {
-  const delta = time - lastTime;
-  lastTime = time;
-  dropCounter += delta;
-
-  if (dropCounter > dropTime) {
-    dropCounter = 0;
-    dropPiece();
+function update() {
+  // Player movement
+  if (cursors.left.isDown) {
+    player.setVelocityX(-300);
+  } else if (cursors.right.isDown) {
+    player.setVelocityX(300);
+  } else {
+    player.setVelocityX(0);
   }
 
-  drawGrid(this);
-}
-
-// Utility functions
-
-function createEmptyGrid() {
-  return Array.from({ length: rows }, () => Array(cols).fill(0));
-}
-
-function createPiece() {
-  const shape = Phaser.Math.RND.pick(tetrominoes);
-  return {
-    x: Math.floor(cols / 2) - Math.floor(shape[0].length / 2),
-    y: 0,
-    shape,
-  };
-}
-
-function drawGrid(scene) {
-  scene.graphics?.clear();
-  scene.graphics = scene.add.graphics();
-
-  // Draw the grid
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const color = grid[r][c] ? 0xffffff : 0x555555;
-      scene.graphics.fillStyle(color, grid[r][c] ? 1 : 0.1);
-      scene.graphics.fillRect(c * gridSize, r * gridSize, gridSize - 1, gridSize - 1);
+  // Remove items that fall off the screen
+  items.children.iterate((item) => {
+    if (item.y > 600) {
+      item.destroy();
+      // Optional: Deduct points for missed items
     }
-  }
-
-  // Draw the current piece
-  for (let r = 0; r < currentPiece.shape.length; r++) {
-    for (let c = 0; c < currentPiece.shape[r].length; c++) {
-      if (currentPiece.shape[r][c]) {
-        scene.graphics.fillStyle(0xff0000, 1);
-        scene.graphics.fillRect(
-          (currentPiece.x + c) * gridSize,
-          (currentPiece.y + r) * gridSize,
-          gridSize - 1,
-          gridSize - 1
-        );
-      }
-    }
-  }
+  });
 }
 
-function movePiece(dir) {
-  currentPiece.x += dir;
-  if (collides()) {
-    currentPiece.x -= dir;
-  }
-}
-
-function rotatePiece() {
-  const shape = currentPiece.shape.map((row, r) =>
-    row.map((_, c) => currentPiece.shape[currentPiece.shape.length - 1 - c][r])
-  );
-  const prevShape = currentPiece.shape;
-  currentPiece.shape = shape;
-  if (collides()) {
-    currentPiece.shape = prevShape;
-  }
-}
-
-function dropPiece() {
-  currentPiece.y++;
-  if (collides()) {
-    currentPiece.y--;
-    mergePiece();
-    currentPiece = nextPiece;
-    nextPiece = createPiece();
-    clearLines();
-    if (collides()) {
-      // Game Over
-      grid = createEmptyGrid();
-    }
-  }
-}
-
-function collides() {
-  for (let r = 0; r < currentPiece.shape.length; r++) {
-    for (let c = 0; c < currentPiece.shape[r].length; c++) {
-      if (
-        currentPiece.shape[r][c] &&
-        (grid[currentPiece.y + r]?.[currentPiece.x + c] === undefined ||
-          grid[currentPiece.y + r][currentPiece.x + c])
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function mergePiece() {
-  for (let r = 0; r < currentPiece.shape.length; r++) {
-    for (let c = 0; c < currentPiece.shape[r].length; c++) {
-      if (currentPiece.shape[r][c]) {
-        grid[currentPiece.y + r][currentPiece.x + c] = 1;
-      }
-    }
-  }
-}
-
-function clearLines() {
-  grid = grid.filter((row) => row.some((cell) => !cell));
-  while (grid.length < rows) {
-    grid.unshift(Array(cols).fill(0));
-  }
+function catchItem(player, item) {
+  item.destroy(); // Remove the caught item
+  score += 10; // Increment score
+  scoreText.setText(`Score: ${score}`); // Update score text
 }
