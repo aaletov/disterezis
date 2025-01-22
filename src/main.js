@@ -29,8 +29,8 @@ let scoreText;
 
 function preload() {
   // Load any assets here
-  this.load.image('basket', 'https://via.placeholder.com/80x20?text=Basket');
-  this.load.image('item', 'https://via.placeholder.com/20x20?text=Item');
+  this.load.image('basket', '/assets/rot.png');
+  this.load.image('item', '/assets/hui.png');
 }
 
 function create() {
